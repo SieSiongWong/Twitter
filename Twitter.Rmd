@@ -1,0 +1,31 @@
+---
+title: "Final Project"
+author: "Sie Siong Wong"
+date: "11/8/2019"
+output: html_document
+---
+
+```{r, eval=TRUE}
+
+installed.packages('base64enc')
+
+```
+
+```{r, eval=TRUE}
+# Load Requried Packages
+
+library("SnowballC")
+library("tm")
+library("twitteR")
+library("syuzhet")
+```
+
+```{r, eval=TRUE}
+
+consumer_key <- 'yq7CmF4xszAVWViyWS4s4Cp1w'
+consumer_secret <- 'lR4fUPuJB7SiyxsGYmaRycKPIy9YEQjQ4dQ83IiZ5ua1kJ8OuH '
+access_token <- '600477513-xDf36uD4pKHu9FRJXieM0XBgnNGdMiSo1m32jYJJ'
+access_secret <- 'CDfCaSggkh9J0nZKrfObfWbStVWQm4a3hgk3ALgmrNFtF'
+
+setup_twitter_oauth(consumer_key, consumer_secret, access_token, access_secret)
+```
