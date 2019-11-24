@@ -8,6 +8,7 @@ output: html_document
 ```{r, eval=TRUE}
 
 installed.packages('base64enc')
+installed.packages('NLP')Yes
 
 ```
 
@@ -18,6 +19,8 @@ library("SnowballC")
 library("tm")
 library("twitteR")
 library("syuzhet")
+library("dplyr")
+library("tidyr")
 ```
 
 ```{r, eval=TRUE}
@@ -48,14 +51,34 @@ Can a S&P 500 trading strategy take advantage of President Trump’s trade-relat
 
 ```{r}
 # Load stock data files and Tweets from Trump 
-# Step 1 of flows above. 
-library(stringr)
-#?readLines
+# Step 1 of the process flow described above. 
 snp_raw <- read.csv("sandp.csv", header = TRUE)
 typeof(snp_raw)
 snp_raw[2,]
 tweets_raw <- read.csv("trumptweets.csv", header = TRUE)
 typeof(tweets_raw)
-tweets_raw[3,]
+tweets_raw[19:20,]
+```
+
+Need to add preprocessing steps:
+The following preprocessing steps were performed with the Gensim and nltk python libraries (NEED TO FIGURE out how to DO THIS IN R):
+- Tweets that contained less than 20 characters (375 tweets in total) were treated as noise and subsequently dropped.
+- Tweets were tokenized; sentences were split into individual words, words were made all lowercase, and punctuation was removed.
+- Default stop words from nltk were used, as well as custom stop words. The process for identifying custom stop words was iterative and included words such as “fake, news, James Comey, Puerto Rico, etc.”, words that dominated tweet topics not pertaining to trade.
+- Words were lemmatized to reduce each word to its base form.
+- Bigrams were made for topic modeling later on. Bigrams were chosen to capture context surrounding individual phrases.
+- Finally, to make the data gensim friendly, a bag of words dictionary detailing how many times a word appears in all tweets was created. Gensim also requires a corpus — a dictionary was created for each tweet containing how many words appear in the tweet and how many times each word appears in the tweet.
+
+```{r}
+#later take off the limit head 
+tweets_sel <- tweets_raw %>% select(id_str, text) %>% head(19)
+typeof(tweets_sel)              
+tweets_sel
+
+```
+#Topic Modeling with LDA
+https://towardsdatascience.com/beginners-guide-to-lda-topic-modelling-with-r-e57a5a8e7a25
+```{r}
+
 ```
 
