@@ -1,6 +1,6 @@
 ---
 title: "Final Project"
-author: "Sie Siong Wong"
+author: "Sie Siong Wong - Joe Rovalino - Anil Akyildirim"
 date: "11/8/2019"
 output: html_document
 ---
@@ -13,7 +13,7 @@ installed.packages('base64enc')
 
 ```{r, eval=TRUE}
 # Load Requried Packages
-
+library("base64enc")
 library("SnowballC")
 library("tm")
 library("twitteR")
@@ -22,10 +22,16 @@ library("syuzhet")
 
 ```{r, eval=TRUE}
 
-consumer_key <- 'yq7CmF4xszAVWViyWS4s4Cp1w'
-consumer_secret <- 'lR4fUPuJB7SiyxsGYmaRycKPIy9YEQjQ4dQ83IiZ5ua1kJ8OuH '
-access_token <- '600477513-xDf36uD4pKHu9FRJXieM0XBgnNGdMiSo1m32jYJJ'
-access_secret <- 'CDfCaSggkh9J0nZKrfObfWbStVWQm4a3hgk3ALgmrNFtF'
+consumer_key <- 'sPwbbZCtf8nfSMxhYTzqI8WHJ'
+consumer_secret <- 'KfcOxgElcQ70fi3QNy8LkuDAN18dunXT147MoA8aBOLzpr3Vd3'
+access_token <- '600477513-rdd3Fcywq1sfnh5S60egRQxXh0TlDqfrLzyZo4Vk'
+access_secret <- 'SdDFCJUOoqAwt671VXeLaD781TdUYdeBSW2gyQMG4P5Zh'
 
 setup_twitter_oauth(consumer_key, consumer_secret, access_token, access_secret)
 ```
+
+```{r}
+tweets <- userTimeline("realDonaldTrump",n=2)
+tweets
+```
+
