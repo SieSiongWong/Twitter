@@ -34,4 +34,28 @@ setup_twitter_oauth(consumer_key, consumer_secret, access_token, access_secret)
 tweets <- userTimeline("realDonaldTrump",n=2)
 tweets
 ```
+***Delete this later as it is a guide for Python nned to get methods for R ***
+
+https://towardsdatascience.com/trump-tweets-and-trade-96ac157ef082
+
+Can a S&P 500 trading strategy take advantage of President Trump’s trade-related tweets and predict short-term moves in the market? I turned to topic modeling and sentiment analysis to find out. The general project design and workflow is as follows:
+1) Data Collection and Preprocessing: raw tweets were collected and preprocessed to pass on tokenized and lemmatized words to the topic model.
+2) Topic Modeling with LDA: topic modeling was utilized to assign each tweet a topic. Only tweets related to the trade topic were passed along for sentiment analysis.
+3) Sentiment Analysis with VADER: after identifying tweets related to trade, each tweet was assigned a sentiment score. Sentiment scores were passed along as the core input to the trading strategy.
+4) Backtesting Trading Strategy on S&P 500 Data: once sentiment scores were assigned, a custom trading strategy was designed to trade on significant sentiment scores.
+
+
+
+```{r}
+# Load stock data files and Tweets from Trump 
+# Step 1 of flows above. 
+library(stringr)
+#?readLines
+snp_raw <- read.csv("sandp.csv", header = TRUE)
+typeof(snp_raw)
+snp_raw[2,]
+tweets_raw <- read.csv("trumptweets.csv", header = TRUE)
+typeof(tweets_raw)
+tweets_raw[3,]
+```
 
