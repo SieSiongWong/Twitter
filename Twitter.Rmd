@@ -21,6 +21,8 @@ library("twitteR")
 library("syuzhet")
 library("dplyr")
 library("tidyr")
+library("tidytext")
+library("textmineR")
 ```
 
 ```{r, eval=TRUE}
@@ -70,6 +72,10 @@ The following preprocessing steps were performed with the Gensim and nltk python
 - Bigrams were made for topic modeling later on. Bigrams were chosen to capture context surrounding individual phrases.
 - Finally, to make the data gensim friendly, a bag of words dictionary detailing how many times a word appears in all tweets was created. Gensim also requires a corpus — a dictionary was created for each tweet containing how many words appear in the tweet and how many times each word appears in the tweet.
 
+
+Pre-processing
+As we observe from the text, there are many tweets which consist of irrelevant information: such as RT, the twitter handle, punctuation, stopwords (and, or the, etc) and numbers. These will add unnecessary noise to our dataset which we need to remove during the pre-processing stage.
+
 ```{r}
 #later take off the limit head 
 tweets_sel <- tweets_raw %>% select(id_str, text) %>% head(20)
@@ -86,7 +92,8 @@ text_cleaning_tokens$word <- gsub('[[:digit:]]+', '', text_cleaning_tokens$word)
 text_cleaning_tokens$word <- gsub('[[:punct:]]+', '', text_cleaning_tokens$word)
 # adding csvs for checking can be removed later - JR
 write.csv(text_cleaning_tokens,"~/Documents/CUNY/Data607/fproject/Twitter/wordtoken.csv", row.names = FALSE)
-stop_words
+# stop_words needs to be further added to also can remove the below two CSV files. 
+# using CSV files to check if stop_words is removing from the word tokens
 text_cleaning_tokens <- text_cleaning_tokens %>% filter(!(nchar(word) == 1))%>% 
   anti_join(stop_words)
 write.csv(text_cleaning_tokens,"~/Documents/CUNY/Data607/fproject/Twitter/wordtokenstopwords.csv", row.names = FALSE)
@@ -101,7 +108,22 @@ tokens$text <- trimws(tokens$text)
 ```
 #Topic Modeling with LDA
 https://towardsdatascience.com/beginners-guide-to-lda-topic-modelling-with-r-e57a5a8e7a25
-```{r}
 
+3- Model Building - create a DTM(document term matrix)
+ In our case, because it’s Twitter sentiment, we will go with a window size of 1–2 words, and let the algorithm decide for us, which are the more important phrases to concatenate together. We will also explore the term frequency matrix, which shows the number of times the word/phrase is occurring in the entire corpus of text. If the term is < 2 times, we discard them, as it does not add any value to the algorithm, and it will help to reduce computation time as well.
+```{r}
+#create DTM
+dtm <- CreateDtm(tokens$text, 
+                 doc_names = tokens$id_str, 
+                 ngram_window = c(1, 2))
+#explore the basic frequency
+tf <- TermDocFreq(dtm = dtm)
+original_tf <- tf %>% select(term, term_freq,doc_freq)
+rownames(original_tf) <- 1:nrow(original_tf)
+# Eliminate words appearing less than 2 times or in more than half of the
+# documents
+vocabulary <- tf$term[ tf$term_freq > 1 & tf$doc_freq < nrow(dtm) / 2 ]
+dtm = dtm
+dtm
 ```
 
