@@ -8,7 +8,7 @@ output: html_document
 ```{r, eval=TRUE}
 
 installed.packages('base64enc')
-installed.packages('NLP')Yes
+installed.packages('NLP')
 
 ```
 
@@ -37,7 +37,7 @@ setup_twitter_oauth(consumer_key, consumer_secret, access_token, access_secret)
 tweets <- userTimeline("realDonaldTrump",n=2)
 tweets
 ```
-***Delete this later as it is a guide for Python nned to get methods for R ***
+***Delete this later as it is a guide for Python need to get methods for R ***
 
 https://towardsdatascience.com/trump-tweets-and-trade-96ac157ef082
 
@@ -58,6 +58,7 @@ snp_raw[2,]
 tweets_raw <- read.csv("trumptweets.csv", header = TRUE)
 typeof(tweets_raw)
 tweets_raw[19:20,]
+stop_words <- read.csv("stopwords.csv", header=TRUE)
 ```
 
 Need to add preprocessing steps:
@@ -83,15 +84,18 @@ text_cleaning_tokens <- tweets_sel %>%
   tidytext::unnest_tokens(word, text)
 text_cleaning_tokens$word <- gsub('[[:digit:]]+', '', text_cleaning_tokens$word)
 text_cleaning_tokens$word <- gsub('[[:punct:]]+', '', text_cleaning_tokens$word)
-# Need to figure out the stop_words 
+# adding csvs for checking can be removed later - JR
+write.csv(text_cleaning_tokens,"~/Documents/CUNY/Data607/fproject/Twitter/wordtoken.csv", row.names = FALSE)
+stop_words
 text_cleaning_tokens <- text_cleaning_tokens %>% filter(!(nchar(word) == 1))%>% 
   anti_join(stop_words)
+write.csv(text_cleaning_tokens,"~/Documents/CUNY/Data607/fproject/Twitter/wordtokenstopwords.csv", row.names = FALSE)
 tokens <- text_cleaning_tokens %>% filter(!(word==""))
 tokens <- tokens %>% mutate(ind = row_number())
-tokens <- tokens %>% group_by(id) %>% mutate(ind = row_number()) %>%
+tokens <- tokens %>% group_by(id_str) %>% mutate(ind = row_number()) %>%
   tidyr::spread(key = ind, value = word)
 tokens [is.na(tokens)] <- ""
-tokens <- tidyr::unite(tokens, text,-id,sep =" " )
+tokens <- tidyr::unite(tokens, text,-id_str,sep =" " )
 tokens$text <- trimws(tokens$text)
 
 ```
