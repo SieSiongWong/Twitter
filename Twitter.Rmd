@@ -5,6 +5,259 @@ date: "11/8/2019"
 output: html_document
 ---
 
+Siong Version:
+---------------------------------------------------------------------------------------------------------------------------------
+
+```{r, eval=TRUE}
+
+installed.packages('base64enc')
+
+```
+
+```{r, eval=TRUE, warning=FALSE, message=FALSE}
+
+# Load Requried Packages
+
+library(tm)
+library(dplyr)
+library(tidyverse)
+library(tidyr)
+library(tidytext)
+library("SnowballC")
+library("tm")
+library("twitteR")
+library("rtweet")
+library("syuzhet")
+library("httr")
+library("lda")
+library("rJava")
+library("coreNLP")
+
+```
+
+## Example of getting tweets from Twitter through API.
+
+```{r, eval=TRUE}
+
+app_name <- "JAS"
+consumer_key <- 'sPwbbZCtf8nfSMxhYTzqI8WHJ'
+consumer_secret <- 'KfcOxgElcQ70fi3QNy8LkuDAN18dunXT147MoA8aBOLzpr3Vd3'
+access_token <- '600477513-rdd3Fcywq1sfnh5S60egRQxXh0TlDqfrLzyZo4Vk'
+access_secret <- 'SdDFCJUOoqAwt671VXeLaD781TdUYdeBSW2gyQMG4P5Zh'
+
+setup_twitter_oauth(consumer_key, consumer_secret, access_token, access_secret)
+tweets <- userTimeline("realDonaldTrump", n=1)
+tweets
+
+```
+
+## Loading of Data
+
+```{r, eval=TRUE}
+
+tweets_raw <- read.csv("https://raw.githubusercontent.com/SieSiongWong/Twitter/dev/trumptweets.csv")
+
+stocks_raw <- read.csv("https://raw.githubusercontent.com/SieSiongWong/Twitter/dev/sandp.csv")
+
+```
+
+## Pre-Processing
+
+### Stock Data Cleaning
+
+```{r, eval}
+
+# Update Date column into date format.
+stocks_raw$Date <- as.Date(stocks_raw$Date)
+
+# Select data from date 2018 January 01 and do percentage change between closing and opening price.
+stocks.df <- stocks_raw %>% 
+  filter(between(Date, as.Date("2018-01-01"),as.Date("2019-11-20"))) %>%
+  mutate(Pct_Change=(Close-Open)/Open*100)
+
+```
+
+
+### Tweets Data Cleaning 
+
+```{r, eval=TRUE}
+
+# Extract columns from trumptweets csv that are useful for analysis.
+tweets_slc <- tweets_raw %>% select(source, text, created_at) 
+
+# Remove source other than iphone.
+tweets_slc <- tweets_slc %>% filter(source=="Twitter for iPhone")
+
+# Drop source column.
+tweets_slc <- tweets_slc %>% select(text, created_at)
+
+# Separate column "created_at" into "date" and "hour".
+tweets_slc <- separate(data = tweets_slc, col = created_at, into  = c('date', 'hour'), sep = ' ') %>% select(text, date, hour)
+
+# Remove minutes in hour column.
+tweets_slc$hour <- gsub("\\:+\\w*","", tweets_slc$hour)
+
+# Remove meaningless characters and symbols.
+tweets_slc$text <- gsub("&amp","", tweets_slc$text)
+tweets_slc$text <- gsub("(RT)((?:\\b\\w*@\\w+)+)","", tweets_slc$text)
+tweets_slc$text <- gsub("^RT","", tweets_slc$text)
+tweets_slc$text <- gsub("@\\w+","", tweets_slc$text)
+tweets_slc$text <- gsub("[[:punct:]]","", tweets_slc$text)
+tweets_slc$text <- gsub("[[:digit:]]+\\s","", tweets_slc$text)
+tweets_slc$text <- gsub("http\\w+","", tweets_slc$text)
+tweets_slc$text <- gsub("[ \t]{2,}"," ", tweets_slc$text)
+
+tweets_slc$text <- iconv(tweets_slc$text, "UTF-8", "ASCII", sub="")
+
+# Add id column.
+tweets_slc$ID <- seq.int(nrow(tweets_slc))
+
+head(tweets_slc, n=100)
+
+```
+
+### Word Frequency
+
+```{r, eval=TRUE}
+
+# Tokenize the text and see frequency of words
+tweets_slc %>% 
+  unnest_tokens(word, text)%>%
+  anti_join(stop_words) %>%
+  count(word, sort=TRUE) 
+
+# From above, we can see that words such as "president, trump" not pertaining to trade, so we remove them.
+tweets_slc <- tweets_slc %>% mutate(text=tolower(text))
+tweets_slc$text <- gsub("president?","", tweets_slc$text)
+tweets_slc$text <- gsub("trump?","", tweets_slc$text)
+head(tweets_slc,n=100)
+  
+# Retokenize the text and check to see if words being removed.
+tweets_slc %>% 
+  unnest_tokens(word, text)%>%
+  anti_join(stop_words) %>%
+  count(word, sort=TRUE)
+
+```
+
+### Document Term Matrix
+
+```{r, eval=TRUE}
+
+# Select text and id column.
+tweetscorpus <- tweets_slc %>% select(text)
+
+# Create corpus for document term matrix.
+tweetscorpus <- VCorpus(VectorSource(tweetscorpus))
+
+# Convert the text to lowercase.
+tweetscorpus <- tm_map(tweetscorpus, content_transformer(tolower))
+tweetscorpus <- tm_map(tweetscorpus, PlainTextDocument)
+
+# Remove all punctuation from the corpus.
+tweetscorpus <- tm_map(tweetscorpus, removePunctuation)
+
+# Remove all English stopwords from the corpus.
+tweetscorpus <- tm_map(tweetscorpus, removeWords, stopwords("en"))
+tweetscorpus <- tm_map(tweetscorpus, removeWords, stopwords("SMART"))
+
+# Remove all number from the corpus.
+tweetscorpus <- tm_map(tweetscorpus, removeNumbers)
+
+# Strip extra white spaces in the corpus.
+tweetscorpus <- tm_map(tweetscorpus, stripWhitespace)
+
+# Stem the words in the corpus.
+#tweetscorpus <- tm_map(tweetscorpus, stemDocument)
+
+# Build document term matrix.
+tweetsdtm<- DocumentTermMatrix(tweetscorpus)
+
+# Remove sparse terms which don't appear very often. Limit the document term matrix to contain terms appearing in at least 5% of documents.
+tweetsdtm <- removeSparseTerms(tweetsdtm, 0.95)
+
+# Put the document in the format lda package required
+tweetsdtm<- as.matrix(tweetsdtm)
+head(tweetsdtm)
+
+```
+
+### Create Topic Modeling
+
+```{r, eval=TRUE}
+library(topicmodels)
+
+tweetsLDA <- LDA(tweetsdtm, 5)
+
+# Top 5 words per Topics
+terms(tweetsLDA, 20)
+
+
+```
+
+## Sentiment Analysis
+
+```{r, eval=TRUE}
+
+# Turn tweets text into vector.
+tweets.df <- as.vector(tweets_slc$text)
+
+# Getting emotion score for each tweet.
+tweets.emotion <- get_nrc_sentiment(tweets.df)
+tweets.emotion <- cbind(tweets_slc, tweets.emotion) 
+head(tweets.emotion)
+
+# Getting sentiment score for each tweet.
+tweets.score <- get_sentiment(tweets.df)
+tweets.score <- cbind(tweets_slc,tweets.score )
+head(tweets.score, n=100)
+
+```
+
+## Visualization 
+
+### Plot Trump's tweets sentiment score on market price change.
+
+````{r, eval=TRUE}
+library(anytime)
+library(dplyr)
+
+# Update column name.
+colnames(tweets.score)[2]<-"Date"
+
+# Aggregate scores into single day.
+tweets.score.sum <- tweets.score %>% 
+  select(Date, tweets.score) %>% 
+  group_by(Date) %>%
+  summarise(scores=sum(tweets.score))
+
+# Update date column into date format.
+tweets.score.sum$Date <- anydate(tweets.score.sum$Date)
+  
+# Filter date to match with stocks dataframe.
+tweets.score.flr <- tweets.score.sum %>% 
+  filter(!is.na(Date)) %>%
+  filter(between(Date, as.Date("2018-01-01"),as.Date("2019-11-20")))
+  
+
+# Bind stocks dataframe and scores dataframe.
+
+stocks.df.new <-  stocks.df %>% select(Date, Pct_Change)
+
+
+stocks.scores <- merge(stocks.df.new,tweets.score.flr, by='Date')
+
+ggplot(stocks.scores, aes(Date)) + ggtitle("Stocks vs Scores") + ylab("%") +  geom_line(aes(y=Pct_Change, group=1, colour="% Change")) + geom_line(aes(y=scores, group=2, colour="Scores")) + theme(plot.title = element_text(hjust=0.5), axis.title.x=element_blank(), axis.text.x=element_text(angle=90,hjust=1), legend.position=c(0.5,0.9),legend.title=element_blank())
+
+
+ggplot(stocks.scores,aes(x=Date)) +  geom_line(aes(y=scores, colour="Scores"))  + geom_line(aes(y=Pct_Change*10, colour="% Change")) + scale_y_continuous(sec.axis = sec_axis(~ ./100 , name = "% Change")) + scale_colour_manual(values=c("blue","red")) + labs(y="Scores", x="Date", colour="Parameter") + theme(legend.position=c(0.5,0.9))
+
+```
+
+Anil Version:
+------------------------------------------------------------------------------------------------------------------------------------
+
+
 ```{r, eval=TRUE}
 
 installed.packages('base64enc')
@@ -356,6 +609,8 @@ For Topic Modelling we can try to use topicsmodel package which is LDA and Senti
 Reference http://www.rdatamining.com/ RDataMining - 
 
 
+Joe Version:
+-----------------------------------------------------------------------------------------------------------------------------------
 
 ***Delete this later as it is a guide for Python need to get methods for R ***
 
