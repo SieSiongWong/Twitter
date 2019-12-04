@@ -1,0 +1,310 @@
+---
+title: "Final Project"
+author:  "Sie Siong Wong - Joe Rovalino - Anil Akyildirim"
+date: "11/8/2019"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_collapsed: true
+theme: lumen
+---
+
+## Load R Packages
+
+```{r, eval=TRUE, warning=FALSE, message=FALSE}
+
+# Load Requried Packages
+library(tm)
+library(lda)
+library(httr)
+library(dplyr)
+library(tidyr)
+library(anytime)
+library(stringi)
+library(twitteR)
+library(syuzhet)
+library(tidytext)
+library(tidyverse)
+library(SnowballC)
+library(topicmodels)
+
+# Package required for running Twitter API authorization.
+installed.packages('base64enc')
+
+```
+
+## Connect to Twitter through API
+
+```{r, eval=TRUE}
+
+# Authorization keys.
+app_name <- "JAS"
+consumer_key <- 'sPwbbZCtf8nfSMxhYTzqI8WHJ'
+consumer_secret <- 'KfcOxgElcQ70fi3QNy8LkuDAN18dunXT147MoA8aBOLzpr3Vd3'
+access_token <- '600477513-rdd3Fcywq1sfnh5S60egRQxXh0TlDqfrLzyZo4Vk'
+access_secret <- 'SdDFCJUOoqAwt671VXeLaD781TdUYdeBSW2gyQMG4P5Zh'
+
+# Extract some tweets from Twitter.
+setup_twitter_oauth(consumer_key, consumer_secret, access_token, access_secret)
+tweets <- userTimeline("realDonaldTrump", n=5)
+tweets
+
+```
+
+## Load Data
+
+```{r, eval=TRUE}
+
+# President Trump tweets from 01/01/2018 to 11/21/2019.
+tweets_raw <- read.csv("https://raw.githubusercontent.com/SieSiongWong/Twitter/dev/trumptweets.csv")
+
+# S&P stock price data from year 01/04/2016 o 11/22/2019.
+stocks_raw <- read.csv("https://raw.githubusercontent.com/SieSiongWong/Twitter/dev/sandp.csv")
+
+```
+
+## Pre-Processing
+
+### Stock Data Cleaning
+
+```{r, eval}
+
+# Update Date column into date format.
+stocks_raw$Date <- as.Date(stocks_raw$Date)
+
+# Select data from 01/01/2018 to 11/20/2019 and calculate price change percentage between close and open price.
+stocks.df <- stocks_raw %>% 
+  filter(between(Date, as.Date("2018-01-01"),as.Date("2019-11-20"))) %>%
+  mutate(Pct_Change=(Close-Open)/Open*100)
+
+```
+
+### Tweets Data Cleaning 
+
+```{r, eval=TRUE}
+
+# Extract columns from trumptweets.csv file that are useful for analysis.
+tweets_slc <- tweets_raw %>% select(source, text, created_at) 
+
+# Remove source other than iphone.
+tweets_slc <- tweets_slc %>% filter(source=="Twitter for iPhone")
+
+# Drop source column.
+tweets_slc <- tweets_slc %>% select(text, created_at)
+
+# Separate column "created_at" into "date" and "hour".
+tweets_slc <- separate(data = tweets_slc, col = created_at, into  = c('date', 'hour'), sep = ' ') %>% select(text, date, hour)
+
+# Remove minutes in hour column.
+tweets_slc$hour <- gsub("\\:+\\w*","", tweets_slc$hour)
+
+# Remove meaningless characters and symbols.
+tweets_slc$text <- gsub("&amp","", tweets_slc$text)
+tweets_slc$text <- gsub("(RT)((?:\\b\\w*@\\w+)+)","", tweets_slc$text)
+tweets_slc$text <- gsub("^RT","", tweets_slc$text)
+tweets_slc$text <- gsub("@\\w+","", tweets_slc$text)
+tweets_slc$text <- gsub("[[:punct:]]","", tweets_slc$text)
+tweets_slc$text <- gsub("[[:digit:]]+\\s","", tweets_slc$text)
+tweets_slc$text <- gsub("http\\w+","", tweets_slc$text)
+tweets_slc$text <- gsub("[ \t]{2,}"," ", tweets_slc$text)
+
+# Remove all non-ASCII characters 
+tweets_slc$text <- iconv(tweets_slc$text, "UTF-8", "ASCII", sub="")
+
+# Delete empty text column.
+tweets_slc <- tweets_slc %>% na_if("") %>% na_if(" ") %>% na.omit()
+
+# Tweets that contained less than 20 characters were treated as noise.
+tweets_slc <- tweets_slc %>% filter(nchar(text)>20)
+
+# Add id column to consider each text row as a document.
+tweets_slc$doc_id <- seq.int(nrow(tweets_slc))
+
+head(tweets_slc)
+
+```
+
+### Word Frequency
+
+```{r, eval=TRUE}
+
+# Tokenize the text and see frequency of words.
+tweets_slc %>% 
+  unnest_tokens(word, text)%>%
+  anti_join(stop_words) %>%
+  count(word, sort=TRUE) 
+
+# We can see that words such as "president, trump" not pertaining to trade, so we remove them.
+tweets_slc <- tweets_slc %>% mutate(text=tolower(text))
+tweets_slc$text <- gsub("president?","", tweets_slc$text)
+tweets_slc$text <- gsub("trump?","", tweets_slc$text)
+
+# Retokenize the text and check to see if words being removed.
+tweets_slc %>% 
+  unnest_tokens(word, text)%>%
+  anti_join(stop_words) %>%
+  count(word, sort=TRUE)
+
+```
+
+## Document Term Matrix
+
+```{r, eval=TRUE}
+
+# Select text and id column.
+tweetscorpus.df <- tweets_slc %>% select(doc_id, text)
+
+# Create a corpus for document term matrix.
+tweetscorpus <- VCorpus(DataframeSource(tweetscorpus.df))
+
+# Remove all punctuation from the corpus.
+tweetscorpus <- tm_map(tweetscorpus, removePunctuation)
+
+# Remove all English stopwords from the corpus.
+tweetscorpus <- tm_map(tweetscorpus, removeWords, stopwords("en"))
+tweetscorpus <- tm_map(tweetscorpus, removeWords, stopwords("SMART"))
+
+# Remove all number from the corpus.
+tweetscorpus <- tm_map(tweetscorpus, removeNumbers)
+
+# Strip extra white spaces in the corpus.
+tweetscorpus <- tm_map(tweetscorpus, stripWhitespace)
+
+# Stem words in the corpus.
+tweetscorpus <- tm_map(tweetscorpus, stemDocument)
+
+# Build a document term matrix.
+tweetsdtm <- DocumentTermMatrix(tweetscorpus)
+
+# Remove sparse terms which don't appear very often. Limit the document term matrix to contain terms appearing in at least 2% of documents.
+tweetsdtm <- removeSparseTerms(tweetsdtm, 0.98)
+
+# Find the sum of words in each document and remove all docs without words.
+rowTotals <- apply(tweetsdtm , 1, sum)
+tweetsdtm.new   <- tweetsdtm[rowTotals> 0, ]
+
+# Put the document in the format lda package required
+tweetsdtm.matrix <- as.matrix(tweetsdtm.new)
+
+head(tweetsdtm.matrix, n=5)
+
+```
+
+## Topic Modeling
+
+### LDA Model
+
+```{r, eval=TRUE}
+
+# Create a LDA model with Gibbs method for 30 topics.
+tweetsLDA <- LDA(tweetsdtm.matrix, 30, method="Gibbs", control = list(seed = 123))
+
+# Top 30 words per topic.
+terms(tweetsLDA, 30)
+
+```
+
+### Per-Document Classification
+
+```{r, eval=TRUE}
+
+# Per-topic-per-word probabilities.
+tweetsLDA.topicword.prob <- tidy(tweetsLDA, matrix="beta")
+tweetsLDA.topicword.prob
+
+# Find the 10 terms that are most common within each topic.
+tweetsLDA.topterms <- tweetsLDA.topicword.prob %>%
+  group_by(topic) %>%
+  top_n(10, beta) %>%
+  ungroup() %>%
+  arrange(topic, -beta)
+
+# Plot per-topic-per-word probabilities for topic #26.
+tweetsLDA.topterms %>%
+  mutate(term = reorder_within(term, beta, topic)) %>%
+  filter(topic==26) %>%
+  ggplot(aes(term, beta, fill = factor(topic))) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ topic, scales = "free") +
+  coord_flip() +
+  scale_x_reordered()
+
+# Classify the selected topic per document.
+tweetsLDA.class <- data.frame(topics(tweetsLDA))
+tweetsLDA.class <- cbind(tweetsLDA.class, 1:nrow(tweetsLDA.class))
+colnames(tweetsLDA.class)[ncol(tweetsLDA.class)] <-'doc_id'
+tweetsLDA.class <- tweetsLDA.class %>% filter(topics.tweetsLDA.==26)
+
+# Inner join selected classified topic with original dataframe.
+tweets.final <- inner_join(tweetsLDA.class, tweets_slc)
+
+```
+
+## Sentiment Analysis
+
+```{r, eval=TRUE}
+
+# Turn tweets text into vector.
+tweets.df <- as.vector(tweets.final$text)
+
+# Getting emotion score for each tweet.
+tweets.emotion <- get_nrc_sentiment(tweets.df)
+tweets.emotion <- cbind(tweets.final, tweets.emotion) 
+head(tweets.emotion)
+
+# Getting sentiment score for each tweet.
+tweets.score <- get_sentiment(tweets.df)
+tweets.score <- cbind(tweets.final,tweets.score )
+head(tweets.score)
+
+```
+
+## Visualization 
+
+### Sentiment Scores vs Stock Price Change
+
+````{r, eval=TRUE}
+
+# Update column name.
+colnames(tweets.score)[4]<-"Date"
+
+# Aggregate scores into single day.
+tweets.score.sum <- tweets.score %>% 
+  select(Date, tweets.score) %>% 
+  group_by(Date) %>%
+  summarise(scores=sum(tweets.score))
+
+# Update date column into date format.
+tweets.score.sum$Date <- anydate(tweets.score.sum$Date)
+  
+# Merge stocks dataframe and scores dataframe.
+stocks.df.new <-  stocks.df %>% select(Date, Pct_Change)
+stocks.scores <- merge(stocks.df.new,tweets.score.sum, by='Date')
+
+## Compare stocks price percentage change with sentiment score.
+
+# Two variables on same y-axis.
+ggplot(stocks.scores, aes(Date)) + ggtitle("Stocks Price Change vs Sentiment Scores") + ylab("") +  geom_line(aes(y=Pct_Change, group=1, colour="Stock Price Change")) + geom_line(aes(y=scores, group=2, colour="Sentiment Scores")) + theme(plot.title = element_text(hjust=0.5), axis.title.x=element_blank(), axis.text.x=element_text(angle=90,hjust=1), legend.position=c(0.5,0.9),legend.title=element_blank())
+
+# Each variable on different y-axis with geom_line.
+ggplot(stocks.scores,aes(x=Date)) +  geom_line(aes(y=scores, colour="Sentiment Scores")) + geom_line(aes(y=Pct_Change*10, colour="Stock Price Change")) + scale_y_continuous(sec.axis = sec_axis(~ ./100 , name = "%")) + scale_colour_manual(values=c("blue","red")) + labs(y="Scores", x="Date", colour="Parameter") + theme(legend.position=c(0.87,0.885))
+
+# Each variable on different y-axis with geom_line and geom_smooth.
+ggplot(stocks.scores,aes(x=Date)) +  geom_line(aes(y=scores, colour="Sentiment Scores")) + geom_smooth(aes(y=Pct_Change*10, colour="Stock Price Change")) + scale_y_continuous(sec.axis = sec_axis(~ ./100 , name = "%")) + scale_colour_manual(values=c("blue","red")) + labs(y="Scores", x="Date", colour="Parameter") + theme(legend.position=c(0.87,0.885))
+
+# Linear Model Regression. Checking to see any linear relationship between sentiment scores and stock price change.
+stocks.scores.lm <- lm(Pct_Change~scores, data=stocks.scores)
+summary(stocks.scores.lm)
+plot(x = stocks.scores$scores, y = stocks.scores$Pct_Change)
+abline(stocks.scores.lm)
+
+```
+
+## References
+
+- Sagar, C. (2018, March 22). Twitter Sentiment Analysis Using R. Dataaspirant. Retrieved from https://dataaspirant.com/2018/03/22/twitter-sentiment-analysis-using-r/
+
+- Silge, J., &  Robinson, D. (2019, November 24). Topic Modeling. Text Mining with R. Retrieved from https://www.tidytextmining.com/topicmodeling.html
+
+- Silge, J., &  Robinson, D. (2019, November 24). Trump, Tweets, and Trade. Medium. Retrieved from https://towardsdatascience.com/trump-tweets-and-trade-96ac157ef082
