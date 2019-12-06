@@ -1,5 +1,5 @@
 ---
-title: "Final Project"
+title: "Twitter Sentiment Analysis"
 author:  "Sie Siong Wong - Joe Rovalino - Anil Akyildirim"
 date: "11/8/2019"
 output:
@@ -29,6 +29,7 @@ library(tidyverse)
 library(SnowballC)
 library(topicmodels)
 library(wordcloud)
+library(BiocManager)
 
 # Package required for running Twitter API authorization.
 installed.packages('base64enc')
@@ -322,7 +323,7 @@ ggplot(stocks.df, aes(x=Date))+
 
 We can see that starting from 2019-01, the stock market is trending upwards. 
 
-# Model Development - Topic Development
+# Model Development
 
 Based on our business objective and the data we have prepared, we decided to proceed with topic modeling as our analytical approach for model development. The idea is for us to identify topics as set of documents, select the right topic and create a final stock market dataframe for prediction. In terms of topic modeling, we have selected Latent Dirichlet Allocation(LDA).
 
@@ -491,7 +492,7 @@ In this section, we included additional approaches we have executed along the wa
 
 ITERATION 2
 
-```{r, eval=TRUE}
+```{r, eval=FALSE, echo=FALSE}
 
 installed.packages('base64enc')
 installed.packages('NLP')
@@ -502,7 +503,7 @@ installed.packages("topicmodels")
 ```
 
 
-```{r, eval=TRUE}
+```{r, eval=FALSE, echo=FALSE}
 # Load Requried Packages
 library("base64enc")
 library("SnowballC")
@@ -529,7 +530,7 @@ library(topicmodels)
 ```
 
 
-```{r, eval=TRUE}
+```{r, eval=FALSE, echo=FALSE}
 
 consumer_key <- 'sPwbbZCtf8nfSMxhYTzqI8WHJ'
 consumer_secret <- 'KfcOxgElcQ70fi3QNy8LkuDAN18dunXT147MoA8aBOLzpr3Vd3'
@@ -540,14 +541,14 @@ setup_twitter_oauth(consumer_key, consumer_secret, access_token, access_secret)
 ```
 
 
-```{r}
+```{r, eval=FALSE, echo=FALSE}
 trump_tweets <- userTimeline("realDonaldTrump", n=3200)
 trump_tweets_df <- tbl_df(map_df(trump_tweets, as.data.frame))
 head(trump_tweets_df)
 ```
 
 
-```{r}
+```{r, eval=FALSE, echo=FALSE}
 
 tweets_raw <- read.csv("trumptweets.csv", header = TRUE)
 tweets <- tweets_raw %>%
@@ -563,7 +564,7 @@ tweets
 ```
 
 
-```{r}
+```{r, eval=FALSE, echo=FALSE}
 
 stock_raw <- read.csv("sandp.csv", header=TRUE)
 head(stock_raw)
@@ -571,7 +572,7 @@ head(stock_raw)
 ```
 
 
-```{r}
+```{r, eval=FALSE, echo=FALSE}
 
 na_count_tweets <- sapply(tweets, function(y) sum(length(which(is.na(y)))))
 na_count_tweets <- data.frame(na_count_tweets)
@@ -585,13 +586,13 @@ na_count_stocks
 
 
 
-```{r}
+```{r, eval=FALSE, echo=FALSE}
 tweets <- na.omit(tweets)
 str(tweets)
 ```
 
 
-```{r}
+```{r, eval=FALSE, echo=FALSE}
 
 tweets$created <- mdy_hm(tweets$created)
 tweets$created <- as.Date(tweets$created)
@@ -599,7 +600,7 @@ tweets
 ```
 
 
-```{r}
+```{r, eval=FALSE, echo=FALSE}
 
 tweets_year <- filter(tweets, created >= as.Date("2018-11-25") & created <= as.Date("2019-11-25"))
 tweets_year
@@ -607,7 +608,7 @@ tweets_year
 ```
 
 
-```{r}
+```{r, eval=FALSE, echo=FALSE}
 # in this one we need to add additional stop words to remove
 
 tweet_corpus <- Corpus(VectorSource(tweets_year$text)) # building a corpus
@@ -630,7 +631,7 @@ tweet_corpus[[1]]
 ```
 
 
-```{r}
+```{r, eval=FALSE, echo=FALSE}
 tweet_corpus[1:5]
 for (i in 1:20) {
     cat(paste("[[", i, "]] ", sep = ""))
@@ -640,7 +641,7 @@ for (i in 1:20) {
 ```
 
 
-```{r}
+```{r, eval=FALSE, echo=FALSE}
 tdm <- TermDocumentMatrix(tweet_corpus,
                           control = list(wordLengths = c(1, Inf)))
 tdm
@@ -649,7 +650,7 @@ tdm
 
 
 
-```{r}
+```{r, eval=FALSE, echo=FALSE}
 # Frequency of Words and their association
 idx <- which(dimnames(tdm)$Terms %in% c("trade", "interest", "war", "fed", "eu"))
 as.matrix(tdm[idx, (1:50)])
@@ -657,7 +658,7 @@ as.matrix(tdm[idx, (1:50)])
 ```
 
 
-```{r}
+```{r, eval=FALSE, echo=FALSE}
 # frequent words
 freq_terms <- findFreqTerms(tdm, lowfreq = 50)
 freq_terms[0:10]
@@ -665,7 +666,7 @@ freq_terms[0:10]
 ```
 
 
-```{r}
+```{r, eval=FALSE, echo=FALSE}
 term_freq <- rowSums(as.matrix(tdm))
 term_freq <- subset(term_freq, term_freq >= 20) # at least 20 times
 df <- data.frame(term = names(term_freq), freq = term_freq)
@@ -677,7 +678,7 @@ top_20
 
 
 
-```{r}
+```{r, eval=FALSE, echo=FALSE}
 theme_set(theme_classic())
 
 
@@ -689,13 +690,13 @@ ggplot(top_20, aes(x=term, y=freq))+
 ```
 
 
-```{r}
+```{r, eval=FALSE, echo=FALSE}
 
 wordcloud(tweet_corpus, max.words = 100, random.order = FALSE, rot.per = 0.15, min.freq = 5, colors = brewer.pal(8, "Dark2"))
 
 ```
 
-```{r}
+```{r, eval=FALSE, echo=FALSE}
 
 # which words are associated with 'trade'?
 findAssocs(tdm, "trade", 0.2)
@@ -714,7 +715,7 @@ findAssocs(tdm, "will", 0.2)
 
 
 
-```{r}
+```{r, eval=FALSE, echo=FALSE}
 #visualizing the association (dont think we need it but if we want to show something fancy we can try)
 plot(tdm, term = freq_terms, corThreshold = 0.35, weighting = T)
 
@@ -722,7 +723,7 @@ plot(tdm, term = freq_terms, corThreshold = 0.35, weighting = T)
 ```
 
 
-```{r}
+```{r, eval=FALSE, echo=FALSE}
 
 dtm <- as.DocumentTermMatrix(tdm)
 lda <- LDA(dtm, k, method = "Gibbs", control = list(nstart=nstart))
@@ -733,7 +734,7 @@ term <- apply(term, MARGIN = 2, paste, collapse = ", ")
 ```
 
 
-```{r}
+```{r, eval=FALSE, echo=FALSE}
 # tdm is 100% sparse - remove sparse terms
 
 sparse_tdm <- removeSparseTerms(tdm, sparse = 0.95) #95% - i will add more write up on this
@@ -741,7 +742,7 @@ sparse_matrix <- as.matrix(sparse_tdm)
 
 ```
 
-```{r}
+```{r, eval=FALSE, echo=FALSE}
 #cluster terms
 
 clust_matrix <- dist(scale(sparse_matrix))
@@ -750,7 +751,7 @@ plot(fit)
 
 ```
 
-```{r}
+```{r, eval=FALSE, echo=FALSE}
 
 # cut tree into 10 clusters
 rect.hclust(fit, k=5)
@@ -759,7 +760,7 @@ rect.hclust(fit, k=5)
 ```
 
 ITERATION 1
-```{r}
+```{r, eval=FALSE, echo=FALSE}
 # Load stock data files and Tweets from Trump 
 # Step 1 of the process flow described above. 
 snp_raw <- read.csv("sandp.csv", header = TRUE)
@@ -772,7 +773,7 @@ stop_words <- read.csv("stopwords.csv", header=TRUE)
 ```
 
 
-```{r}
+```{r, eval=FALSE, echo=FALSE}
 #later take off the limit head 
 tweets_sel <- tweets_raw %>% select(id_str, text) %>% head(20)
 typeof(tweets_sel)              
@@ -803,7 +804,7 @@ tokens$text <- trimws(tokens$text)
 
 ```
 
-```{r}
+```{r, eval=FALSE, echo=FALSE}
 #create DTM
 dtm <- CreateDtm(tokens$text, 
                  doc_names = tokens$id_str, 
